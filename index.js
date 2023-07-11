@@ -1,12 +1,11 @@
 import express from 'express';
 import { createServer } from 'http';
 import { ReasonPhrases, StatusCodes } from 'http-status-codes';
-import { randomUUID } from 'crypto';
 import logger from 'logger';
-import { spawn } from 'child_process';
-import path from 'path';
 
-const children = new Map();
+import Task from './MyTask.js';
+
+const tasks = new Map();
 
 const app = express();
 
@@ -15,52 +14,49 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get('/', (req, res, next) => {
-  const id = randomUUID();
-  const child = spawn(path.join(process.cwd(), 'process.sh'));
-
-  children.set(id, { result: null, status: 'in progress' });
-
-  res
-    .status(StatusCodes.ACCEPTED)
-    .send({ status: `/status/${id}` })
-    .end();
-
-  let rawData = '';
-
-  child.stdout.on('data', (chunk) => {
-    logger.debug(chunk);
-    rawData += chunk;
-  });
-
-  child.stderr.on('data', (chunk) => {
-    logger.error(chunk);
-  });
-
-  child.on('close', (code) => {
-    if (code !== 0) {
-      children.get(id).status = 'failed';
-      return next(new Error('process failed'));
-    }
-
-    children.get(id).status = 'done';
-    children.get(id).result = Buffer.from(rawData).toString('utf-8');
-  });
+app.post('/tasks', (req, res, next) => {
+  const task = new Task();
+  tasks.set(task.id, task);
+  task.run();
+  return res.status(StatusCodes.ACCEPTED).send(task).end();
 });
 
-app.get('/status/:id', (req, res, next) => {
-  const result = children.get(req.params.id);
-  if (!result) {
-    return res.status(StatusCodes.NOT_FOUND).send(ReasonPhrases.NOT_FOUND).end();
+app.get('/tasks/:id', (req, res, next) => {
+  const task = tasks.get(req.params.id);
+  if (!task) {
+    res.setHeader('Content-Type', 'text/plain');
+    return res.status(StatusCodes.NOT_FOUND).send('Task not found').end();
   }
-  res.status(StatusCodes.OK).send(result).end();
+  res.setHeader('Content-Type', 'application/json');
+  return res.status(StatusCodes.OK).send(task).end();
 });
 
+app.get('/tasks/:id/result', (req, res, next) => {
+  const task = tasks.get(req.params.id);
+  res.setHeader('Content-Type', 'text/plain');
+  if (!task) {
+    return res.status(StatusCodes.NOT_FOUND).send('Task not found').end();
+  }
+  if (task.status === 'pending') {
+    return res.status(StatusCodes.NOT_FOUND).send('Task pending').end();
+  }
+  return res.status(StatusCodes.OK).send(task.result).end();
+});
+
+app.get('/health', (req, res, next) => {
+  res.setHeader('Content-Type', 'text/plain');
+  res.status(StatusCodes.OK).send(ReasonPhrases.OK).end();
+});
+
+/**
+ * Error handling
+ */
 app.use((error, req, res, next) => {
   logger.error(error.message);
   if (res.headersSent) {
     return next(error);
   }
+  res.setHeader('Content-Type', 'text/plain');
   return res.status(StatusCodes.INTERNAL_SERVER_ERROR).end();
 });
 

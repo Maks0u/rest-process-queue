@@ -1,4 +1,10 @@
 #!/bin/bash
 
-sleep 3
-echo Hello world!
+dd if=/dev/zero of=/dev/null bs=1GB count=100 |
+    dd if=/dev/zero of=/dev/null bs=1GB count=100 |
+    dd if=/dev/zero of=/dev/null bs=1GB count=100 |
+    dd if=/dev/zero of=/dev/null bs=1GB count=100 |
+    dd if=/dev/zero of=/dev/null bs=1GB count=100 |
+    dd if=/dev/zero of=/dev/null bs=1GB count=100 |
+    dd if=/dev/zero of=/dev/null bs=1GB count=100 |
+    dd if=/dev/zero of=/dev/null bs=1GB count=100
